@@ -1,3 +1,4 @@
+import time
 import requests
 import argparse
 from bs4 import BeautifulSoup
@@ -12,6 +13,8 @@ headers = {
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
 def _scrape(current_link):
+    """Fetch a Wikipedia page and get the link for every article referenced."""
+
     html = requests.get(current_link, headers=headers).text
     soup = BeautifulSoup(html, "html.parser")
 
@@ -24,13 +27,15 @@ def _scrape(current_link):
         text = element.get_text()
         if link and "wikipedia" in link and len(text.strip()) > 0:
             actual_destination = link.split('/')[-1]
-            links[text] = f"https://en.wikipedia.org/wiki/{actual_destination}" 
+            links[text] = f"https://en.wikipedia.org/wiki/{actual_destination}"
 
 
     return links
 
 
 def _get_closest(link_dictionary, target):
+    "Greedy pick whichever article is semantically closest to the target page name, using sentence embedding."
+
     target = target.replace(' ', '_')
 
     target_embedding = model.encode(target)
@@ -51,7 +56,6 @@ def main():
     parser.add_argument("start", type=str, help="The starting wikipedia page.")
     parser.add_argument("target", type=str, help="The target wikipedia page.")
 
-    
     args = parser.parse_args()
 
     current, target = args.start, args.target
@@ -62,16 +66,20 @@ def main():
 
     visited = [current_link]
 
+    start_time = time.time()
+
     while(current_link != target_link):
         links = _scrape(current_link)
-        links = {text : link for text, link in links.items() if link not in visited}
+        links = {text : link for text, link in links.items() if link not in visited}  
 
         if not links:
             print("Hit a dead end.")
             return
 
         text, link = _get_closest(links, args.target)
+
         print(f"Visiting {text.replace('_', ' ')} @ {link}")
+
         current = text
         current_link = link
 
@@ -79,15 +87,12 @@ def main():
 
         attemps += 1
 
-        if attemps > 50:
+        if attemps > 500: 
             print("Gave up.")
             return
 
     print(f"Successfully reached {target.replace('_', ' ')}!")
-    print(f"It took {attemps} attemps.")
-
-
+    print(f"It took {attemps} attemps and {time.time() - start_time} seconds.")
 
 if __name__ == "__main__":
     main()
-
