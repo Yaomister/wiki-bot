@@ -21,22 +21,24 @@ def _scrape(current_link):
     body = soup.find(id="mw-content-text")
 
     links = {}
+    prefix = "https://en.wikipedia.org/wiki/"
 
     for element in body.find_all('a'):
         link = element.get('href')
-        text = element.get_text()
-        if link and "wikipedia" in link and len(text.strip()) > 0:
-            actual_destination = link.split('/')[-1]
-            links[text] = f"https://en.wikipedia.org/wiki/{actual_destination}"
-
+        title = element.get("title")
+        if not link or not title:
+            continue
+        if (link.startswith(prefix)
+                and ":" not in link[len(prefix):]   # skip Template:, File:, Portal: — check title only!
+                and "?" not in link
+                and "#" not in link):
+            links[title] = link
 
     return links
 
 
 def _get_closest(link_dictionary, target):
     "Greedy pick whichever article is semantically closest to the target page name, using sentence embedding."
-
-    target = target.replace(' ', '_')
 
     target_embedding = model.encode(target)
 
@@ -47,6 +49,8 @@ def _get_closest(link_dictionary, target):
     scores = util.cos_sim(target_embedding, embeddings)
 
     max_index = scores.argmax()
+
+    print(scores.max())
 
     return texts[max_index],links[max_index]
             
